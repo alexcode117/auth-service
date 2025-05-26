@@ -1,13 +1,20 @@
+import * as bcrypt from 'bcrypt';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
+import { User } from 'generated/prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
+import { Request } from 'express';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private prisma: PrismaService,
+    private configService: ConfigService,
   ) {}
 
   async validateUser(email: string, password: string) {
@@ -21,22 +28,44 @@ export class AuthService {
     return user;
   }
 
-  async login(email: string, password: string) {
-    const user = await this.validateUser(email, password);
-
-    const tokens = await this.generateTokens(user.id, user.email);
-    const hashedRefreshToken = await bcrypt.hash(tokens.refreshToken, 10);
-    await this.usersService.updateRefreshToken(user.id, hashedRefreshToken);
-
-    return {
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
+  async login(user: User, req: Request) {
+    const jti = randomUUID();
+  
+    const refreshToken = this.jwtService.sign(
+      {
+        sub: user.id,
+        jti,
       },
-    };
+      {
+        secret: this.configService.get('JWT_REFRESH_SECRET'),
+        expiresIn: '7d',
+      },
+    );
+  
+    const accessToken = this.jwtService.sign(
+      {
+        sub: user.id,
+      },
+      {
+        secret: this.configService.get('JWT_SECRET'),
+        expiresIn: '15m',
+      },
+    );
+  
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  
+    await this.prisma.session.create({
+      data: {
+        userId: user.id,
+        jti,
+        refreshToken,
+        userAgent,
+        ip,
+      },
+    });
+  
+    return { accessToken, refreshToken };
   }
 
   async register(data: { email: string; password: string; name: string }) {
@@ -82,15 +111,51 @@ export class AuthService {
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: this.config.get('JWT_SECRET'),
+        secret: this.configService.get('JWT_SECRET'),
         expiresIn: '15m',
       }),
       this.jwtService.signAsync(payload, {
-        secret: this.config.get('JWT_REFRESH_SECRET'),
+        secret: this.configService.get('JWT_REFRESH_SECRET'),
         expiresIn: '7d',
       }),
     ]);
 
     return { accessToken, refreshToken };
+  }
+
+  async refreshToken(token: string) {
+    try {
+      const payload = this.jwtService.verify(token, {
+        secret: this.configService.get('JWT_REFRESH_SECRET'),
+      });
+
+      const user = await this.usersService.findById(payload.sub);
+      if (!user) throw new UnauthorizedException('Usuario no encontrado');
+
+      const session = await this.prisma.session.findFirst({
+        where: { jti: payload.jti },
+      });
+      if (!session) throw new UnauthorizedException('Sesión inválida');
+
+      const accessToken = this.jwtService.sign(
+        { sub: user.id },
+        {
+          secret: this.configService.get('JWT_SECRET'),
+          expiresIn: '15m',
+        },
+      );
+
+      const refreshToken = this.jwtService.sign(
+        { sub: user.id, jti: session.jti },
+        {
+          secret: this.configService.get('JWT_REFRESH_SECRET'),
+          expiresIn: '7d',
+        },
+      );
+
+      return { accessToken, refreshToken };
+    } catch (error) {
+      throw new UnauthorizedException('Token inválido');
+    }
   }
 }
