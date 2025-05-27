@@ -1,98 +1,154 @@
+# Microservicio de Autenticación
+
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+  <img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" />
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Descripción
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Este microservicio de autenticación está construido con [NestJS](https://github.com/nestjs/nest) y proporciona una solución robusta para la gestión de autenticación y autorización de usuarios. Utiliza JWT para la autenticación, Redis para caché y rate limiting, y una base de datos MySQL para el almacenamiento persistente.
 
-## Description
+## Características
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- ✅ Autenticación basada en JWT
+- ✅ Gestión de usuarios (registro, login, actualización)
+- ✅ Caché de tokens con Redis
+- ✅ Blacklisting de tokens revocados
+- ✅ Rate limiting para protección contra ataques
+- ✅ Caché de datos de usuario
+- ✅ Gestión de sesiones
 
-## Project setup
+## Arquitectura
 
-```bash
-$ npm install
+```
+┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
+│   NestJS App        │    │   Redis Server      │    │   MySQL             │
+│   (Puerto 3000)     │◄──►│   (Puerto 6379)     │    │   (Puerto 3306)     │
+│                     │    │                     │    │                     │
+│ • Auth Controllers  │    │ • Token Cache       │    │ • User Data         │
+│ • JWT Guards        │    │ • Rate Limiting     │    │ • Persistent Data   │
+│ • Rate Limiting     │    │ • Session Cache     │    │ • Audit Logs        │
+│ • Business Logic    │    │ • Blacklisted IDs   │    │ • User Preferences  │
+└─────────────────────┘    └─────────────────────┘    └─────────────────────┘
 ```
 
-## Compile and run the project
+## Requisitos previos
+
+- Node.js (v16 o superior)
+- MySQL
+- Redis
+- Docker (opcional, para contenedores)
+
+## Configuración del entorno
+
+Crea un archivo `.env` en la raíz del proyecto con las siguientes variables:
+
+```
+# Database Configurations
+DATABASE_URL="mysql://root:root@localhost:3306/auth_db"
+
+# Server Configurations
+PORT=3000
+
+# JWT Configurations
+JWT_SECRET=your_secret_key
+JWT_EXPIRES_IN=1h
+
+# Redis Configurations
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+REDIS_TTL_DEFAULT=300
+REDIS_MAX_MEMORY=256mb
+```
+
+## Instalación
 
 ```bash
-# development
+# Instalar dependencias
+$ npm install
+
+# Configurar Redis con Docker (opcional)
+$ docker run -d --name redis-auth -p 6379:6379 redis:7-alpine
+
+# Verificar conexión a Redis
+$ docker exec -it redis-auth redis-cli ping
+# Debería responder: PONG
+```
+
+## Ejecución
+
+```bash
+# Desarrollo
 $ npm run start
 
-# watch mode
+# Modo observador (desarrollo)
 $ npm run start:dev
 
-# production mode
+# Producción
 $ npm run start:prod
 ```
 
-## Run tests
+## Endpoints de API
+
+### Autenticación
+
+- `POST /auth/register` - Registro de nuevo usuario
+- `POST /auth/login` - Inicio de sesión
+- `POST /auth/logout` - Cierre de sesión (revoca token)
+- `GET /auth/profile` - Obtener perfil del usuario autenticado
+- `POST /auth/refresh` - Refrescar token JWT
+
+### Usuarios
+
+- `GET /users` - Listar usuarios (admin)
+- `GET /users/:id` - Obtener usuario por ID
+- `PATCH /users/:id` - Actualizar usuario
+- `DELETE /users/:id` - Eliminar usuario
+
+## Implementación de Redis
+
+El proyecto utiliza Redis para:
+
+1. **Caché de tokens**: Almacenamiento y validación rápida de tokens JWT
+2. **Blacklisting de tokens**: Lista negra de tokens revocados
+3. **Rate limiting**: Protección contra ataques de fuerza bruta
+4. **Caché de usuarios**: Mejora de rendimiento en consultas frecuentes
+5. **Gestión de sesiones**: Control de sesiones activas
+
+## Pruebas
 
 ```bash
-# unit tests
+# Pruebas unitarias
 $ npm run test
 
-# e2e tests
+# Pruebas e2e
 $ npm run test:e2e
 
-# test coverage
+# Cobertura de pruebas
 $ npm run test:cov
 ```
 
-## Deployment
+## Estructura del proyecto
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+```
+auth-service/
+├── src/
+│   ├── auth/               # Módulo de autenticación
+│   ├── cache/              # Módulo de caché con Redis
+│   ├── common/             # Utilidades y decoradores comunes
+│   ├── config/             # Configuraciones
+│   ├── guards/             # Guards de autenticación
+│   ├── prisma/             # Cliente de base de datos
+│   ├── users/              # Módulo de usuarios
+│   ├── app.module.ts       # Módulo principal
+│   └── main.ts             # Punto de entrada
+├── docs/                   # Documentación
+├── prisma/                 # Esquemas de Prisma
+└── test/                   # Pruebas
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Licencia
 
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Este proyecto está licenciado bajo la licencia MIT.
