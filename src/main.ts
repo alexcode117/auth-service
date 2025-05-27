@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
-import { ThrottlerExceptionFilter } from './guards/throttler-exception.filter';
+import { ThrottlerExceptionFilter } from './common/guards/throttler-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
